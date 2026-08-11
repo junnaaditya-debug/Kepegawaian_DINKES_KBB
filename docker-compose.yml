@@ -1,0 +1,42 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: simpeg
+      POSTGRES_PASSWORD: simpeg
+      POSTGRES_DB: simpeg_dinkes_kbb
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  server:
+    build: ./server
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgresql://simpeg:simpeg@db:5432/simpeg_dinkes_kbb?schema=public
+      JWT_SECRET: change-this-to-a-long-random-secret-in-production
+      JWT_EXPIRES_IN: 8h
+      PORT: 4000
+      CLIENT_ORIGIN: http://localhost:8080
+      UPLOAD_DIR: uploads
+      MAX_UPLOAD_MB: 10
+    volumes:
+      - uploads_data:/app/uploads
+    ports:
+      - "4000:4000"
+
+  client:
+    build: ./client
+    restart: unless-stopped
+    depends_on:
+      - server
+    ports:
+      - "8080:80"
+
+volumes:
+  db_data:
+  uploads_data:

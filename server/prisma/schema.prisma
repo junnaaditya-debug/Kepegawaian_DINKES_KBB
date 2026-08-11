@@ -1,0 +1,404 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==========================================================
+// ENUM
+// ==========================================================
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN_KEPEGAWAIAN
+  KEPALA_BIDANG
+  KEPALA_DINAS
+  PEGAWAI
+}
+
+enum JenisKelamin {
+  L
+  P
+}
+
+enum StatusKepegawaian {
+  CPNS
+  PNS
+  PPPK
+}
+
+enum StatusAktifPegawai {
+  AKTIF
+  PENSIUN
+  MUTASI_KELUAR
+  MENINGGAL
+  CUTI_DI_LUAR_TANGGUNGAN
+  NON_AKTIF_LAINNYA
+}
+
+enum JenisJabatan {
+  STRUKTURAL
+  FUNGSIONAL_TERTENTU
+  PELAKSANA
+}
+
+enum JenisKenaikanPangkat {
+  REGULER
+  FUNGSIONAL
+  PILIHAN
+}
+
+enum StatusTindakLanjut {
+  BELUM_DIPROSES
+  SEDANG_DIUSULKAN
+  SK_TERBIT
+  DITUNDA
+}
+
+enum JenisDokumen {
+  SK_CPNS
+  SK_PNS
+  SK_PANGKAT
+  IJAZAH
+  SERTIFIKAT_DIKLAT
+  PAK
+  SKP
+  USULAN_KENAIKAN_PANGKAT
+  FOTO
+  LAINNYA
+}
+
+enum PredikatSkp {
+  SANGAT_BAIK
+  BAIK
+  CUKUP
+  KURANG
+  SANGAT_KURANG
+}
+
+enum JenjangFungsional {
+  PEMULA
+  TERAMPIL
+  MAHIR
+  PENYELIA
+  AHLI_PERTAMA
+  AHLI_MUDA
+  AHLI_MADYA
+  AHLI_UTAMA
+}
+
+// ==========================================================
+// MASTER / ORGANISASI
+// ==========================================================
+
+model UnitKerja {
+  id        String   @id @default(cuid())
+  nama      String
+  jenis     String // PUSKESMAS, UPTD, DINAS_INDUK, BIDANG
+  alamat    String?
+  parentId  String?
+  parent    UnitKerja?  @relation("UnitKerjaHierarchy", fields: [parentId], references: [id])
+  children  UnitKerja[] @relation("UnitKerjaHierarchy")
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  pegawai         Pegawai[]
+  riwayatJabatan  RiwayatJabatan[]
+  users           User[]
+}
+
+// ==========================================================
+// USER & AUTH
+// ==========================================================
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  email        String?  @unique
+  passwordHash String
+  nama         String
+  role         Role
+  unitKerjaId  String?
+  unitKerja    UnitKerja? @relation(fields: [unitKerjaId], references: [id])
+  pegawaiId    String?    @unique
+  pegawai      Pegawai?   @relation(fields: [pegawaiId], references: [id])
+  isActive     Boolean  @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  logAktivitas    LogAktivitas[]
+  notifikasi      Notifikasi[]
+  dokumenUploaded Dokumen[]              @relation("DokumenUploadedBy")
+  statusUpdated   StatusUsulanKenaikanPangkat[] @relation("StatusUpdatedBy")
+}
+
+// ==========================================================
+// PEGAWAI (DATA INDUK)
+// ==========================================================
+
+model Pegawai {
+  id                 String              @id @default(cuid())
+  nip                String              @unique
+  nipLama            String?
+  nama               String
+  gelarDepan         String?
+  gelarBelakang      String?
+  tempatLahir        String?
+  tanggalLahir       DateTime?
+  jenisKelamin       JenisKelamin
+  alamat             String?
+  noHp                String?
+  email              String?
+  fotoUrl            String?
+  agama              String?
+  statusKepegawaian  StatusKepegawaian
+  tmtCpns            DateTime?
+  tmtPns             DateTime?
+  statusAktif        StatusAktifPegawai @default(AKTIF)
+  tanggalNonAktif    DateTime?
+  keteranganNonAktif String?
+  unitKerjaId        String?
+  unitKerja          UnitKerja?          @relation(fields: [unitKerjaId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
+  updatedBy String?
+
+  user                       User?
+  riwayatPendidikan          RiwayatPendidikan[]
+  riwayatJabatan             RiwayatJabatan[]
+  riwayatPangkatGolongan     RiwayatPangkatGolongan[]
+  angkaKredit                AngkaKredit[]
+  nilaiSkp                   NilaiSkp[]
+  dokumen                    Dokumen[]
+  statusUsulanKenaikanPangkat StatusUsulanKenaikanPangkat[]
+
+  @@index([nama])
+  @@index([statusAktif])
+}
+
+model RiwayatPendidikan {
+  id            String   @id @default(cuid())
+  pegawaiId     String
+  pegawai       Pegawai  @relation(fields: [pegawaiId], references: [id], onDelete: Cascade)
+  jenjang       String // SD, SMP, SMA/SMK, D3, D4, S1, Profesi, S2, S3
+  jurusan       String?
+  namaInstitusi String?
+  tahunLulus    Int?
+  nomorIjazah   String?
+  dokumenId     String?  @unique
+  dokumen       Dokumen? @relation(fields: [dokumenId], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model RiwayatJabatan {
+  id              String       @id @default(cuid())
+  pegawaiId       String
+  pegawai         Pegawai      @relation(fields: [pegawaiId], references: [id], onDelete: Cascade)
+  jenisJabatan    JenisJabatan
+  namaJabatan     String
+  jenjangJabatan  JenjangFungsional?
+  unitKerjaId     String?
+  unitKerja       UnitKerja?   @relation(fields: [unitKerjaId], references: [id])
+  tmtJabatan      DateTime
+  tglSelesai      DateTime?
+  isAktif         Boolean      @default(true)
+  nomorSk         String?
+  tanggalSk       DateTime?
+  dokumenId       String?      @unique
+  dokumen         Dokumen?     @relation(fields: [dokumenId], references: [id])
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([pegawaiId, isAktif])
+}
+
+model RiwayatPangkatGolongan {
+  id              String   @id @default(cuid())
+  pegawaiId       String
+  pegawai         Pegawai  @relation(fields: [pegawaiId], references: [id], onDelete: Cascade)
+  golonganRuang   String // e.g III/a
+  namaPangkat     String
+  tmt             DateTime
+  nomorSk         String?
+  tanggalSk       DateTime?
+  pejabatPenetap  String?
+  isAktif         Boolean  @default(true)
+  dokumenId       String?  @unique
+  dokumen         Dokumen? @relation(fields: [dokumenId], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([pegawaiId, isAktif])
+}
+
+model AngkaKredit {
+  id                        String   @id @default(cuid())
+  pegawaiId                 String
+  pegawai                   Pegawai  @relation(fields: [pegawaiId], references: [id], onDelete: Cascade)
+  nomorPak                  String
+  tanggalPak                DateTime
+  periodePenilaianAwal      DateTime
+  periodePenilaianAkhir     DateTime
+  angkaKreditKumulatif      Float
+  unsurUtama                Float?
+  unsurPengembanganProfesi  Float?
+  unsurPenunjang            Float?
+  dokumenId                 String?  @unique
+  dokumen                   Dokumen? @relation(fields: [dokumenId], references: [id])
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  @@index([pegawaiId])
+}
+
+model NilaiSkp {
+  id          String       @id @default(cuid())
+  pegawaiId   String
+  pegawai     Pegawai      @relation(fields: [pegawaiId], references: [id], onDelete: Cascade)
+  tahun       Int
+  predikat    PredikatSkp
+  nilaiAngka  Float?
+  keterangan  String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@unique([pegawaiId, tahun])
+}
+
+// ==========================================================
+// PARAMETER ATURAN (KONFIGURASI, DIKELOLA SUPER ADMIN)
+// ==========================================================
+
+model ParameterAturan {
+  id                          Int      @id @default(autoincrement())
+  masaKerjaMinimumTahun       Int      @default(4)
+  predikatSkpMinimum          PredikatSkp @default(BAIK)
+  reminderBulanSebelum1       Int      @default(6)
+  reminderBulanSebelum2       Int      @default(3)
+  wajibValidasiSkp            Boolean  @default(true)
+  updatedAt                   DateTime @updatedAt
+  updatedBy                   String?
+}
+
+model PeriodeKenaikanPangkat {
+  id        String @id @default(cuid())
+  bulan     Int // 1-12
+  tanggal   Int // 1-31
+  label     String // e.g "Periode April"
+  aktif     Boolean @default(true)
+}
+
+model JenisJabatanFungsional {
+  id       String @id @default(cuid())
+  nama     String @unique // e.g Perawat, Dokter, Bidan, Apoteker
+  rumpun   String? // e.g Kesehatan
+
+  jenjangAngkaKredit ParameterJenjangAngkaKredit[]
+}
+
+model ParameterJenjangAngkaKredit {
+  id                        String                 @id @default(cuid())
+  jenisJabatanFungsionalId  String
+  jenisJabatanFungsional    JenisJabatanFungsional @relation(fields: [jenisJabatanFungsionalId], references: [id], onDelete: Cascade)
+  jenjang                   JenjangFungsional
+  golonganRuang             String
+  angkaKreditMinimum        Float
+  urutan                    Int // urutan jenjang untuk menentukan next level
+
+  @@unique([jenisJabatanFungsionalId, jenjang])
+}
+
+// ==========================================================
+// KENAIKAN PANGKAT TRACKING
+// ==========================================================
+
+model StatusUsulanKenaikanPangkat {
+  id              String               @id @default(cuid())
+  pegawaiId       String
+  pegawai         Pegawai              @relation(fields: [pegawaiId], references: [id], onDelete: Cascade)
+  periodeTahun    Int
+  periodeBulan    Int
+  jenisKenaikan   JenisKenaikanPangkat
+  status          StatusTindakLanjut   @default(BELUM_DIPROSES)
+  catatan         String?
+  updatedById     String?
+  updatedBy       User?                @relation("StatusUpdatedBy", fields: [updatedById], references: [id])
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@unique([pegawaiId, periodeTahun, periodeBulan, jenisKenaikan])
+  @@index([periodeTahun, periodeBulan])
+}
+
+// ==========================================================
+// DOKUMEN
+// ==========================================================
+
+model Dokumen {
+  id             String       @id @default(cuid())
+  pegawaiId      String?
+  pegawai        Pegawai?     @relation(fields: [pegawaiId], references: [id], onDelete: Cascade)
+  jenisDokumen   JenisDokumen
+  namaFile       String
+  namaAsli       String
+  path           String
+  mimeType       String
+  ukuran         Int
+  versi          Int          @default(1)
+  dokumenIndukId String?
+  dokumenInduk   Dokumen?     @relation("DokumenVersi", fields: [dokumenIndukId], references: [id])
+  versiSebelumnya Dokumen[]   @relation("DokumenVersi")
+  uploadedById   String?
+  uploadedBy     User?        @relation("DokumenUploadedBy", fields: [uploadedById], references: [id])
+  createdAt      DateTime     @default(now())
+
+  riwayatPendidikan     RiwayatPendidikan?
+  riwayatJabatan        RiwayatJabatan?
+  riwayatPangkatGolongan RiwayatPangkatGolongan?
+  angkaKredit           AngkaKredit?
+
+  @@index([pegawaiId])
+}
+
+// ==========================================================
+// NOTIFIKASI & LOG
+// ==========================================================
+
+model Notifikasi {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  judul     String
+  pesan     String
+  jenis     String // KENAIKAN_PANGKAT, SISTEM, dll
+  link      String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead])
+}
+
+model LogAktivitas {
+  id          String   @id @default(cuid())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id])
+  aksi        String // CREATE, UPDATE, DELETE, LOGIN, EXPORT, dll
+  entitas     String // nama tabel/entitas
+  entitasId   String?
+  deskripsi   String?
+  dataSebelum Json?
+  dataSesudah Json?
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+
+  @@index([entitas, entitasId])
+  @@index([userId])
+  @@index([createdAt])
+}
