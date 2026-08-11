@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { api, errorMessage } from "../api/client";
+import { api, downloadFile, errorMessage } from "../api/client";
 import { Badge, Button, Card, EmptyState, Input, Modal, Select, Spinner } from "../components/ui";
 import type { Pegawai, UnitKerja } from "../types";
 import { label } from "../utils/format";
@@ -37,7 +37,7 @@ export default function PegawaiListPage() {
   });
 
   function exportExcel() {
-    window.open("/api/laporan/pegawai/excel", "_blank");
+    downloadFile("/laporan/pegawai/excel");
   }
 
   return (
@@ -54,7 +54,7 @@ export default function PegawaiListPage() {
           {canEdit && (
             <>
               <Button variant="secondary" onClick={() => setShowImport(true)}>
-                Import Excel
+                Import CSV
               </Button>
               <Button onClick={() => setShowAdd(true)}>+ Tambah Pegawai</Button>
             </>
@@ -275,15 +275,15 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
   }
 
   return (
-    <Modal open onClose={onClose} title="Import Data Pegawai (Excel)">
+    <Modal open onClose={onClose} title="Import Data Pegawai (CSV)">
       <div className="space-y-3">
         <p className="text-sm text-slate-600">
-          File Excel (.xlsx) dengan baris header berisi kolom minimal <code className="rounded bg-slate-100 px-1">nip</code> dan{" "}
+          File CSV (baris pertama = header) dengan kolom minimal <code className="rounded bg-slate-100 px-1">nip</code> dan{" "}
           <code className="rounded bg-slate-100 px-1">nama</code>. Kolom opsional: <code className="rounded bg-slate-100 px-1">nipLama</code>,{" "}
           <code className="rounded bg-slate-100 px-1">jenisKelamin</code>, <code className="rounded bg-slate-100 px-1">statusKepegawaian</code>,{" "}
-          <code className="rounded bg-slate-100 px-1">unitKerjaNama</code>.
+          <code className="rounded bg-slate-100 px-1">unitKerjaNama</code>. Simpan file Excel sebagai CSV (File → Save As → CSV) sebelum diunggah.
         </p>
-        <input type="file" accept=".xlsx" onChange={(e) => setFile(e.target.files?.[0] || null)} className="text-sm" />
+        <input type="file" accept=".csv" onChange={(e) => setFile(e.target.files?.[0] || null)} className="text-sm" />
         {error && <p className="text-sm text-red-600">{error}</p>}
         {result && (
           <div className="rounded-md bg-slate-50 p-3 text-sm">

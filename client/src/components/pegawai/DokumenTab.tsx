@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { api, errorMessage } from "../../api/client";
+import { api, errorMessage, openFileInNewTab } from "../../api/client";
 import { Button, Card, EmptyState, Field, Modal, Select } from "../ui";
 import { formatTanggalWaktu, formatUkuranFile, label } from "../../utils/format";
 import { useAuth } from "../../context/AuthContext";
@@ -36,9 +36,9 @@ export default function DokumenTab({ pegawaiId, data }: { pegawaiId: string; dat
                 {formatUkuranFile(d.ukuran)} · v{d.versi} · {formatTanggalWaktu(d.createdAt)}
               </p>
               <div className="mt-2 flex gap-3 text-xs">
-                <a href={`/uploads/${d.namaFile}`} target="_blank" rel="noreferrer" className="font-medium text-sky-700 hover:underline">
+                <button onClick={() => openFileInNewTab(`/dokumen/file/${d.id}`)} className="font-medium text-sky-700 hover:underline">
                   Lihat / Unduh
-                </a>
+                </button>
                 {canEdit && (
                   <button onClick={() => hapus(d.id)} className="font-medium text-red-600 hover:underline">
                     Hapus

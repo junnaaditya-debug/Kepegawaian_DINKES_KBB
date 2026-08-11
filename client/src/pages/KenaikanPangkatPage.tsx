@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { api, errorMessage } from "../api/client";
+import { api, downloadFile, errorMessage } from "../api/client";
 import { Badge, Button, Card, EmptyState, Field, Modal, Select, Spinner } from "../components/ui";
 import type { KandidatKenaikanPangkat, UnitKerja } from "../types";
 import { BULAN_LABEL, label } from "../utils/format";
@@ -30,11 +30,11 @@ export default function KenaikanPangkatPage() {
         .then((r) => r.data),
   });
 
-  const params = new URLSearchParams({
+  const exportParams = {
     ...(unitKerjaId ? { unitKerjaId } : {}),
     ...(jenisKenaikan ? { jenisKenaikan } : {}),
     bulanKeDepan,
-  }).toString();
+  };
 
   return (
     <div className="space-y-4">
@@ -44,10 +44,10 @@ export default function KenaikanPangkatPage() {
           <p className="text-sm text-slate-500">Deteksi otomatis pegawai yang sudah/akan waktunya naik pangkat & golongan</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="secondary" onClick={() => window.open(`/api/laporan/kenaikan-pangkat/excel?${params}`, "_blank")}>
+          <Button variant="secondary" onClick={() => downloadFile("/laporan/kenaikan-pangkat/excel", undefined, exportParams)}>
             Export Excel
           </Button>
-          <Button variant="secondary" onClick={() => window.open(`/api/laporan/kenaikan-pangkat/pdf?${params}`, "_blank")}>
+          <Button variant="secondary" onClick={() => downloadFile("/laporan/kenaikan-pangkat/pdf", undefined, exportParams)}>
             Export PDF
           </Button>
         </div>
