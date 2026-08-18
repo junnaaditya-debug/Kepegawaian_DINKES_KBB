@@ -81,6 +81,40 @@ web/                     Frontend React (Vite + Tailwind), deploy ke Pages
     lib/                    API client, auth context, format helpers
 ```
 
+## Cara Tercepat: Deploy via GitHub Actions (Recommended)
+
+Repo ini sudah menyertakan workflow `.github/workflows/deploy.yml` yang
+men-deploy backend (Worker + D1 + R2) dan frontend (Pages) secara otomatis —
+jalan di infrastruktur GitHub, sehingga tidak terpengaruh kebijakan jaringan
+lingkungan development manapun.
+
+1. Buka **Settings → Secrets and variables → Actions** pada repo GitHub ini,
+   tambahkan 3 secret berikut:
+
+   | Secret | Cara mendapatkan |
+   |---|---|
+   | `CLOUDFLARE_ACCOUNT_ID` | Dashboard Cloudflare → sidebar kanan halaman overview akun |
+   | `CLOUDFLARE_API_TOKEN` | [dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens) → Create Token → Custom Token dengan izin **Account: Workers Scripts (Edit), Cloudflare Pages (Edit), D1 (Edit), Workers R2 Storage (Edit)** |
+   | `JWT_SECRET` | String acak yang panjang & rahasia, mis. hasil `openssl rand -base64 48` |
+
+2. Buka tab **Actions** → pilih workflow **"Deploy SIMPEG-DINKES KBB to
+   Cloudflare"** → **Run workflow**.
+3. Workflow ini otomatis (idempoten, aman dijalankan berulang):
+   - Membuat database D1 `simpeg-dinkes-kbb-db` dan bucket R2
+     `simpeg-dinkes-kbb-docs` bila belum ada
+   - Menjalankan migrasi skema + seed data referensi
+   - Set secret `JWT_SECRET` pada Worker
+   - Deploy Worker API, lalu build & deploy frontend ke Cloudflare Pages
+     dengan `VITE_API_BASE_URL` otomatis diarahkan ke URL Worker yang baru
+     dideploy
+4. Setelah selesai (lihat ringkasan URL di halaman run tersebut, tab
+   *Summary*), akses frontend di `https://simpeg-dinkes-kbb.pages.dev` dan
+   login dengan akun Super Admin default (lihat bagian *Setup Backend* di
+   bawah) — **segera ganti password default setelah login pertama**.
+
+Ingin deploy manual dari mesin sendiri (tanpa GitHub Actions)? Ikuti langkah
+di bawah ini.
+
 ## Setup Backend (`worker/`)
 
 Prasyarat: Node.js 18+, akun Cloudflare, `wrangler` (terpasang sebagai
