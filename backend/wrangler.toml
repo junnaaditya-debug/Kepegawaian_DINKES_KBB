@@ -1,0 +1,25 @@
+name = "simpeg-dinkes-kbb-api"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+compatibility_flags = ["nodejs_compat"]
+
+[observability]
+enabled = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "simpeg_dinkes_kbb"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "DOCS_BUCKET"
+bucket_name = "simpeg-dinkes-kbb-dokumen"
+
+[vars]
+ENVIRONMENT = "production"
+JWT_ISSUER = "simpeg-dinkes-kbb"
+ACCESS_TOKEN_TTL_SECONDS = "28800"
+
+# Secrets (set via `wrangler secret put`, do NOT put real values here):
+# JWT_SECRET - random 32+ byte secret used to sign auth tokens
