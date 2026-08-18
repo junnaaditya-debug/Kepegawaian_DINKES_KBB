@@ -12,7 +12,7 @@ crons = ["0 1 * * *"]
 [[d1_databases]]
 binding = "DB"
 database_name = "simpeg-dinkes-kbb-db"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "0ced3169-f072-4eb2-9810-f6d1a74fbf10"
 migrations_dir = "migrations"
 
 [[r2_buckets]]
@@ -20,7 +20,7 @@ binding = "DOCS"
 bucket_name = "simpeg-dinkes-kbb-docs"
 
 [vars]
-ENVIRONMENT = "development"
+ENVIRONMENT = "production"
 JWT_ISSUER = "simpeg-dinkes-kbb"
 ACCESS_TOKEN_TTL_SECONDS = "3600"
 REFRESH_TOKEN_TTL_SECONDS = "1209600"
