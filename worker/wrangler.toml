@@ -1,0 +1,29 @@
+name = "simpeg-dinkes-kbb-api"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+[observability]
+enabled = true
+
+[triggers]
+crons = ["0 1 * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "simpeg-dinkes-kbb-db"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "DOCS"
+bucket_name = "simpeg-dinkes-kbb-docs"
+
+[vars]
+ENVIRONMENT = "development"
+JWT_ISSUER = "simpeg-dinkes-kbb"
+ACCESS_TOKEN_TTL_SECONDS = "3600"
+REFRESH_TOKEN_TTL_SECONDS = "1209600"
+
+# Secrets (set via `wrangler secret put`):
+#   JWT_SECRET
