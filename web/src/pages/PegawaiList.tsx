@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import { Plus, Search, Upload, Download, FileText } from "lucide-react";
+import { Plus, Search, Upload, Download, FileText, Eye, Pencil, Trash2 } from "lucide-react";
 import { api, ApiError, downloadFile } from "../lib/api";
-import type { Paginated, PegawaiListItem } from "../types";
-import { PageHeader, Pagination, Spinner, Badge, Modal, EmptyState } from "../components/ui";
+import type { Paginated, PegawaiListItem, PegawaiDetail } from "../types";
+import { PageHeader, Pagination, Spinner, Badge, Modal, EmptyState, ConfirmButton } from "../components/ui";
 import { useUnitKerjaList } from "../hooks/useReference";
 import { useAuth } from "../lib/auth";
 import { GOLONGAN_LIST, JENIS_JABATAN_OPTIONS } from "../lib/constants";
@@ -14,7 +14,9 @@ import PegawaiFormModal from "../components/PegawaiFormModal";
 export default function PegawaiList() {
   const { user } = useAuth();
   const canWrite = user?.role === "super_admin" || user?.role === "admin_kepegawaian";
+  const canDelete = user?.role === "super_admin";
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { data: unitKerjaList } = useUnitKerjaList();
 
   const [search, setSearch] = useState("");
@@ -24,6 +26,8 @@ export default function PegawaiList() {
   const [page, setPage] = useState(1);
   const [showCreate, setShowCreate] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [editingPegawai, setEditingPegawai] = useState<PegawaiDetail | null>(null);
+  const [loadingEditId, setLoadingEditId] = useState<number | null>(null);
 
   const pageSize = 20;
 
@@ -54,6 +58,27 @@ export default function PegawaiList() {
       toast.error("Gagal mengunduh laporan");
     }
   }
+
+  async function openEdit(id: number) {
+    setLoadingEditId(id);
+    try {
+      const detail = await api.get<PegawaiDetail>(`/pegawai/${id}`);
+      setEditingPegawai(detail);
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Gagal memuat data pegawai");
+    } finally {
+      setLoadingEditId(null);
+    }
+  }
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => api.delete(`/pegawai/${id}`),
+    onSuccess: () => {
+      toast.success("Pegawai berhasil dihapus");
+      queryClient.invalidateQueries({ queryKey: ["pegawai", "list"] });
+    },
+    onError: (err) => toast.error(err instanceof ApiError ? err.message : "Gagal menghapus pegawai"),
+  });
 
   return (
     <div>
@@ -135,17 +160,18 @@ export default function PegawaiList() {
                   <th className="px-4 py-3">Jabatan</th>
                   <th className="px-4 py-3">Golongan/Pangkat</th>
                   <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3 text-right">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {data.data.map((p) => (
                   <tr key={p.id} className="hover:bg-slate-50">
                     <td className="px-4 py-3">
-                      <Link to={`/pegawai/${p.id}`} className="font-medium text-brand-700 hover:underline">
+                      <p className="font-medium text-slate-800">
                         {p.gelar_depan ? `${p.gelar_depan} ` : ""}
                         {p.nama}
                         {p.gelar_belakang ? `, ${p.gelar_belakang}` : ""}
-                      </Link>
+                      </p>
                       <p className="text-xs text-slate-500">{p.nip}</p>
                     </td>
                     <td className="px-4 py-3 text-slate-600">{p.unit_kerja_nama}</td>
@@ -155,6 +181,32 @@ export default function PegawaiList() {
                     </td>
                     <td className="px-4 py-3">
                       <Badge color={p.status_aktif === "aktif" ? "green" : "slate"}>{p.status_aktif}</Badge>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex justify-end gap-1">
+                        <button className="btn-ghost px-2 py-1" title="Lihat" onClick={() => navigate(`/pegawai/${p.id}`)}>
+                          <Eye size={15} />
+                        </button>
+                        {canWrite && (
+                          <button
+                            className="btn-ghost px-2 py-1"
+                            title="Ubah"
+                            disabled={loadingEditId === p.id}
+                            onClick={() => openEdit(p.id)}
+                          >
+                            {loadingEditId === p.id ? <Spinner size={15} /> : <Pencil size={15} />}
+                          </button>
+                        )}
+                        {canDelete && (
+                          <ConfirmButton
+                            className="btn-ghost px-2 py-1 text-red-500"
+                            confirmText={`Hapus data pegawai ${p.nama}? Tindakan ini tidak dapat dibatalkan.`}
+                            onConfirm={() => deleteMutation.mutate(p.id)}
+                          >
+                            <Trash2 size={15} />
+                          </ConfirmButton>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -179,6 +231,19 @@ export default function PegawaiList() {
         <ImportModal
           onClose={() => setShowImport(false)}
           onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ["pegawai", "list"] });
+          }}
+        />
+      )}
+
+      {editingPegawai && (
+        <PegawaiFormModal
+          mode="edit"
+          pegawaiId={editingPegawai.id}
+          initial={editingPegawai}
+          onClose={() => setEditingPegawai(null)}
+          onSuccess={() => {
+            setEditingPegawai(null);
             queryClient.invalidateQueries({ queryKey: ["pegawai", "list"] });
           }}
         />
