@@ -5,18 +5,21 @@ import toast from "react-hot-toast";
 import { Download, FileText, ShieldCheck } from "lucide-react";
 import { api, ApiError, downloadFile } from "../lib/api";
 import type { KenaikanPangkatRow } from "../types";
-import { Badge, EmptyState, PageHeader, Spinner } from "../components/ui";
+import { Badge, ConfirmButton, EmptyState, PageHeader, Spinner } from "../components/ui";
 import { useUnitKerjaList } from "../hooks/useReference";
 import { useAuth } from "../lib/auth";
-import { STATUS_KEPEGAWAIAN_OPTIONS, STATUS_USULAN_LABELS } from "../lib/constants";
-import { formatNumber } from "../lib/format";
+import { GOLONGAN_LIST, STATUS_KEPEGAWAIAN_OPTIONS, STATUS_USULAN_LABELS } from "../lib/constants";
+import { formatDate, formatNumber } from "../lib/format";
 
-const STATUS_COLORS: Record<string, "slate" | "blue" | "green" | "yellow"> = {
+const STATUS_COLORS: Record<string, "slate" | "blue" | "green" | "yellow" | "red"> = {
   belum_diproses: "slate",
   sedang_diusulkan: "blue",
   sk_terbit: "green",
   ditunda: "yellow",
+  dibatalkan: "red",
 };
+
+const STATUS_FILTER_OPTIONS = ["belum_diproses", "sedang_diusulkan", "ditunda", "dibatalkan"];
 
 export default function KenaikanPangkat() {
   const { user } = useAuth();
@@ -29,30 +32,51 @@ export default function KenaikanPangkat() {
   const [unitKerjaId, setUnitKerjaId] = useState("");
   const [jenisKepegawaian, setJenisKepegawaian] = useState("");
   const [rentangBulan, setRentangBulan] = useState("6");
+  const [golongan, setGolongan] = useState("");
+  const [periode, setPeriode] = useState("");
+  const [status, setStatus] = useState("");
+  const [tglDari, setTglDari] = useState("");
+  const [tglSampai, setTglSampai] = useState("");
   const [noteFor, setNoteFor] = useState<KenaikanPangkatRow | null>(null);
+  const [usulkanFor, setUsulkanFor] = useState<KenaikanPangkatRow | null>(null);
+
+  const { data: periodeOptions } = useQuery({
+    queryKey: ["kenaikan-pangkat", "proyeksi-periode", rentangBulan],
+    queryFn: () => api.get<{ tanggal: string; label: string }[]>("/kenaikan-pangkat/proyeksi-periode", { bulanKeDepan: rentangBulan }),
+  });
+
+  const [periodeTahun, periodeBulan] = periode ? periode.split("-").map(Number) : [undefined, undefined];
 
   const { data, isLoading } = useQuery({
-    queryKey: ["kenaikan-pangkat", "deteksi", { jenis, unitKerjaId, jenisKepegawaian, rentangBulan }],
+    queryKey: ["kenaikan-pangkat", "deteksi", { jenis, unitKerjaId, jenisKepegawaian, rentangBulan, golongan, periode, status, tglDari, tglSampai }],
     queryFn: () =>
       api.get<{ data: KenaikanPangkatRow[]; total: number }>("/kenaikan-pangkat/deteksi", {
         jenis: jenis === "all" ? undefined : jenis,
         unitKerjaId: unitKerjaId || undefined,
         jenisKepegawaian: jenisKepegawaian || undefined,
         rentangBulan,
+        golongan: golongan || undefined,
+        status: status || undefined,
+        periodeTahun,
+        periodeBulan,
+        tanggalPengusulanDari: tglDari || undefined,
+        tanggalPengusulanSampai: tglSampai || undefined,
       }),
   });
 
   const statusMutation = useMutation({
-    mutationFn: ({ row, status, catatan }: { row: KenaikanPangkatRow; status: string; catatan?: string }) =>
+    mutationFn: ({ row, status, catatan, tanggalPengusulan }: { row: KenaikanPangkatRow; status: string; catatan?: string; tanggalPengusulan?: string }) =>
       api.patch(`/kenaikan-pangkat/status/${row.pegawaiId}/${row.periodeTahun}/${row.periodeBulan}`, {
         status,
         catatan,
+        tanggalPengusulan,
         jenisKenaikan: row.jenisKenaikan,
       }),
     onSuccess: () => {
       toast.success("Status tindak lanjut diperbarui");
       queryClient.invalidateQueries({ queryKey: ["kenaikan-pangkat"] });
       setNoteFor(null);
+      setUsulkanFor(null);
     },
     onError: (err) => toast.error(err instanceof ApiError ? err.message : "Gagal memperbarui status"),
   });
@@ -73,7 +97,18 @@ export default function KenaikanPangkat() {
     try {
       await downloadFile(
         `/laporan/kenaikan-pangkat/${format}`,
-        { jenis: jenis === "all" ? undefined : jenis, unitKerjaId: unitKerjaId || undefined, jenisKepegawaian: jenisKepegawaian || undefined, rentangBulan },
+        {
+          jenis: jenis === "all" ? undefined : jenis,
+          unitKerjaId: unitKerjaId || undefined,
+          jenisKepegawaian: jenisKepegawaian || undefined,
+          rentangBulan,
+          golongan: golongan || undefined,
+          status: status || undefined,
+          periodeTahun,
+          periodeBulan,
+          tanggalPengusulanDari: tglDari || undefined,
+          tanggalPengusulanSampai: tglSampai || undefined,
+        },
         `usulan-kenaikan-pangkat.${format === "excel" ? "xlsx" : "pdf"}`
       );
     } catch {
@@ -120,12 +155,46 @@ export default function KenaikanPangkat() {
             </option>
           ))}
         </select>
-        <select className="input max-w-[220px]" value={rentangBulan} onChange={(e) => setRentangBulan(e.target.value)}>
+        <select className="input max-w-[220px]" value={rentangBulan} onChange={(e) => { setRentangBulan(e.target.value); setPeriode(""); }}>
           <option value="3">3 bulan ke depan</option>
           <option value="6">6 bulan ke depan</option>
           <option value="12">1 tahun ke depan</option>
           <option value="24">2 tahun ke depan</option>
         </select>
+        <select className="input max-w-[160px]" value={golongan} onChange={(e) => setGolongan(e.target.value)}>
+          <option value="">Semua Golongan</option>
+          {GOLONGAN_LIST.map((g) => (
+            <option key={g} value={g}>
+              {g}
+            </option>
+          ))}
+        </select>
+        <select className="input max-w-[200px]" value={periode} onChange={(e) => setPeriode(e.target.value)}>
+          <option value="">Semua Periode</option>
+          {periodeOptions?.map((p) => {
+            const d = new Date(p.tanggal);
+            const value = `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}`;
+            return (
+              <option key={value} value={value}>
+                {p.label}
+              </option>
+            );
+          })}
+        </select>
+        <select className="input max-w-[180px]" value={status} onChange={(e) => setStatus(e.target.value)}>
+          <option value="">Semua Status</option>
+          {STATUS_FILTER_OPTIONS.map((s) => (
+            <option key={s} value={s}>
+              {STATUS_USULAN_LABELS[s]}
+            </option>
+          ))}
+        </select>
+        <div className="flex items-center gap-1">
+          <label className="text-xs text-slate-500">Tgl. Pengusulan</label>
+          <input type="date" className="input w-[150px]" value={tglDari} onChange={(e) => setTglDari(e.target.value)} />
+          <span className="text-xs text-slate-400">s.d.</span>
+          <input type="date" className="input w-[150px]" value={tglSampai} onChange={(e) => setTglSampai(e.target.value)} />
+        </div>
       </div>
 
       <div className="card overflow-hidden">
@@ -146,6 +215,7 @@ export default function KenaikanPangkat() {
                   <th className="px-4 py-3">Golongan</th>
                   <th className="px-4 py-3">Periode</th>
                   <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Tanggal Pengusulan</th>
                   <th className="px-4 py-3">Aksi</th>
                 </tr>
               </thead>
@@ -179,6 +249,7 @@ export default function KenaikanPangkat() {
                         )}
                       </div>
                     </td>
+                    <td className="px-4 py-3 text-slate-600">{r.tanggalPengusulan ? formatDate(r.tanggalPengusulan) : "-"}</td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-1">
                         {canWrite && (
@@ -186,10 +257,19 @@ export default function KenaikanPangkat() {
                             <button
                               className="btn-ghost px-2 py-1 text-xs"
                               disabled={r.status === "sedang_diusulkan"}
-                              onClick={() => statusMutation.mutate({ row: r, status: "sedang_diusulkan" })}
+                              onClick={() => setUsulkanFor(r)}
                             >
                               Usulkan
                             </button>
+                            {r.status === "sedang_diusulkan" && (
+                              <ConfirmButton
+                                className="btn-ghost px-2 py-1 text-xs text-red-600"
+                                confirmText={`Batalkan usulan kenaikan pangkat ${r.nama} untuk periode ${r.periodeLabel}?`}
+                                onConfirm={() => statusMutation.mutate({ row: r, status: "dibatalkan" })}
+                              >
+                                Usulan Dibatalkan
+                              </ConfirmButton>
+                            )}
                             <button className="btn-ghost px-2 py-1 text-xs text-amber-600" onClick={() => setNoteFor(r)}>
                               Tunda
                             </button>
@@ -219,6 +299,15 @@ export default function KenaikanPangkat() {
           loading={statusMutation.isPending}
         />
       )}
+
+      {usulkanFor && (
+        <UsulkanModal
+          row={usulkanFor}
+          onClose={() => setUsulkanFor(null)}
+          onSubmit={(tanggalPengusulan) => statusMutation.mutate({ row: usulkanFor, status: "sedang_diusulkan", tanggalPengusulan })}
+          loading={statusMutation.isPending}
+        />
+      )}
     </div>
   );
 }
@@ -237,6 +326,28 @@ function TundaModal({ row, onClose, onSubmit, loading }: { row: KenaikanPangkatR
             Batal
           </button>
           <button className="btn-primary" disabled={!catatan || loading} onClick={() => onSubmit(catatan)}>
+            {loading && <Spinner size={14} />} Simpan
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function UsulkanModal({ row, onClose, onSubmit, loading }: { row: KenaikanPangkatRow; onClose: () => void; onSubmit: (tanggalPengusulan: string) => void; loading: boolean }) {
+  const [tanggal, setTanggal] = useState(() => new Date().toISOString().slice(0, 10));
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={onClose}>
+      <div className="card w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+        <h2 className="mb-1 text-base font-semibold text-slate-900">Usulkan Kenaikan Pangkat</h2>
+        <p className="mb-4 text-sm text-slate-500">{row.nama} — {row.periodeLabel}</p>
+        <label className="label">Tanggal Pengusulan *</label>
+        <input type="date" className="input" value={tanggal} onChange={(e) => setTanggal(e.target.value)} required />
+        <div className="mt-4 flex justify-end gap-2">
+          <button className="btn-secondary" onClick={onClose}>
+            Batal
+          </button>
+          <button className="btn-primary" disabled={!tanggal || loading} onClick={() => onSubmit(tanggal)}>
             {loading && <Spinner size={14} />} Simpan
           </button>
         </div>

@@ -134,8 +134,9 @@ export interface KenaikanPangkatRow {
   periodeBulan: number;
   periodeLabel: string;
   overdue: boolean;
-  status: "belum_diproses" | "sedang_diusulkan" | "sk_terbit" | "ditunda";
+  status: "belum_diproses" | "sedang_diusulkan" | "sk_terbit" | "ditunda" | "dibatalkan";
   catatan: string | null;
+  tanggalPengusulan: string | null;
   diverifikasiAtasan: boolean;
   catatanVerifikasi: string | null;
 }

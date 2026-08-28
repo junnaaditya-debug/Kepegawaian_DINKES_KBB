@@ -21,6 +21,7 @@ export interface EligibilityRow {
   overdue: boolean;
   status: string;
   catatan: string | null;
+  tanggalPengusulan: string | null;
   diverifikasiAtasan: boolean;
   catatanVerifikasi: string | null;
 }
@@ -36,9 +37,15 @@ export interface DeteksiOptions {
   jenis?: string;
   unitKerjaId?: number;
   jenisKepegawaian?: string;
+  golongan?: string;
+  status?: string;
+  periodeTahun?: number;
+  periodeBulan?: number;
+  tanggalPengusulanDari?: string;
+  tanggalPengusulanSampai?: string;
 }
 
-async function computeEligibility(env: Env, opts: DeteksiOptions): Promise<Omit<EligibilityRow, "status" | "catatan" | "diverifikasiAtasan" | "catatanVerifikasi">[]> {
+async function computeEligibility(env: Env, opts: DeteksiOptions): Promise<Omit<EligibilityRow, "status" | "catatan" | "tanggalPengusulan" | "diverifikasiAtasan" | "catatanVerifikasi">[]> {
   const today = new Date();
   const periodes = await loadParam<PeriodeConfig[]>(env, "periode_tahunan");
   const defaultMasaKerja = await loadParam<number>(env, "masa_kerja_minimum_reguler_bulan");
@@ -54,7 +61,7 @@ async function computeEligibility(env: Env, opts: DeteksiOptions): Promise<Omit<
   const normGol = (g: string | null | undefined) => (g ?? "").trim().toUpperCase();
   const golonganMap = new Map(golonganOverrides.results.map((g) => [normGol(g.golongan_ruang), g]));
 
-  const rows: Omit<EligibilityRow, "status" | "catatan" | "diverifikasiAtasan" | "catatanVerifikasi">[] = [];
+  const rows: Omit<EligibilityRow, "status" | "catatan" | "tanggalPengusulan" | "diverifikasiAtasan" | "catatanVerifikasi">[] = [];
 
   if (!opts.jenis || opts.jenis === "reguler" || opts.jenis === "all") {
     const { results } = await env.DB.prepare(
@@ -169,6 +176,9 @@ async function computeEligibility(env: Env, opts: DeteksiOptions): Promise<Omit<
   let filtered = rows;
   if (opts.unitKerjaId) filtered = filtered.filter((r) => r.unitKerjaId === opts.unitKerjaId);
   if (opts.jenisKepegawaian) filtered = filtered.filter((r) => r.statusKepegawaian === opts.jenisKepegawaian);
+  if (opts.golongan) filtered = filtered.filter((r) => normGol(r.golonganSaatIni) === normGol(opts.golongan));
+  if (opts.periodeTahun) filtered = filtered.filter((r) => r.periodeTahun === opts.periodeTahun);
+  if (opts.periodeBulan) filtered = filtered.filter((r) => r.periodeBulan === opts.periodeBulan);
   return filtered.sort((a, b) => a.periodeTahun - b.periodeTahun || a.periodeBulan - b.periodeBulan || a.nama.localeCompare(b.nama));
 }
 
@@ -177,21 +187,28 @@ export async function getDeteksiKenaikanPangkat(env: Env, opts: DeteksiOptions):
   const rows = await computeEligibility(env, opts);
 
   const statusRows = await env.DB.prepare(
-    `SELECT pegawai_id, periode_tahun, periode_bulan, status, catatan, diverifikasi_atasan, catatan_verifikasi
+    `SELECT pegawai_id, periode_tahun, periode_bulan, status, catatan, tanggal_pengusulan, diverifikasi_atasan, catatan_verifikasi
      FROM status_usulan_kenaikan_pangkat`
   ).all<any>();
   const statusMap = new Map(statusRows.results.map((s) => [`${s.pegawai_id}-${s.periode_tahun}-${s.periode_bulan}`, s]));
 
-  return rows
+  let enriched = rows
     .map((r) => {
       const st = statusMap.get(`${r.pegawaiId}-${r.periodeTahun}-${r.periodeBulan}`);
       return {
         ...r,
         status: st?.status ?? "belum_diproses",
         catatan: st?.catatan ?? null,
+        tanggalPengusulan: st?.tanggal_pengusulan ?? null,
         diverifikasiAtasan: !!st?.diverifikasi_atasan,
         catatanVerifikasi: st?.catatan_verifikasi ?? null,
       };
     })
     .filter((r) => r.status !== "sk_terbit");
+
+  if (opts.status) enriched = enriched.filter((r) => r.status === opts.status);
+  if (opts.tanggalPengusulanDari) enriched = enriched.filter((r) => !!r.tanggalPengusulan && r.tanggalPengusulan >= opts.tanggalPengusulanDari!);
+  if (opts.tanggalPengusulanSampai) enriched = enriched.filter((r) => !!r.tanggalPengusulan && r.tanggalPengusulan <= opts.tanggalPengusulanSampai!);
+
+  return enriched;
 }

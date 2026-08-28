@@ -29,6 +29,12 @@ route.get("/deteksi", async (c) => {
     jenis: q.jenis,
     unitKerjaId,
     jenisKepegawaian: q.jenisKepegawaian,
+    golongan: q.golongan,
+    status: q.status,
+    periodeTahun: q.periodeTahun ? Number(q.periodeTahun) : undefined,
+    periodeBulan: q.periodeBulan ? Number(q.periodeBulan) : undefined,
+    tanggalPengusulanDari: q.tanggalPengusulanDari,
+    tanggalPengusulanSampai: q.tanggalPengusulanSampai,
   });
 
   return c.json({ data: enriched, total: enriched.length });
@@ -45,21 +51,30 @@ route.patch("/status/:pegawaiId/:tahun/:bulan", requireRole(...WRITE_ROLES), asy
   const user = c.get("user");
   const body = await c.req.json();
   const status = body.status as string;
-  if (!["belum_diproses", "sedang_diusulkan", "ditunda"].includes(status)) {
-    throw badRequest("Status harus salah satu dari: belum_diproses, sedang_diusulkan, ditunda (SK Terbit hanya melalui input Riwayat Pangkat)");
+  if (!["belum_diproses", "sedang_diusulkan", "ditunda", "dibatalkan"].includes(status)) {
+    throw badRequest("Status harus salah satu dari: belum_diproses, sedang_diusulkan, ditunda, dibatalkan (SK Terbit hanya melalui input Riwayat Pangkat)");
   }
   if (status === "ditunda" && !body.catatan) throw badRequest("Catatan alasan wajib diisi untuk status 'ditunda'");
 
   const pegawai = await c.env.DB.prepare(`SELECT id FROM pegawai WHERE id = ?`).bind(pegawaiId).first();
   if (!pegawai) throw notFound("Pegawai tidak ditemukan");
 
+  // Tanggal pengusulan dicatat saat aksi "Usulkan" ditekan (status -> sedang_diusulkan);
+  // untuk aksi lain kolomnya tidak disentuh sehingga riwayat tanggal pengusulan sebelumnya tetap ada.
+  const tanggalPengusulan = status === "sedang_diusulkan" ? body.tanggalPengusulan || new Date().toISOString().slice(0, 10) : null;
+
   await c.env.DB.prepare(
-    `INSERT INTO status_usulan_kenaikan_pangkat (pegawai_id, periode_tahun, periode_bulan, jenis_kenaikan, status, catatan, updated_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO status_usulan_kenaikan_pangkat (pegawai_id, periode_tahun, periode_bulan, jenis_kenaikan, status, catatan, tanggal_pengusulan, updated_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(pegawai_id, periode_tahun, periode_bulan)
-     DO UPDATE SET status = excluded.status, catatan = excluded.catatan, updated_by = excluded.updated_by, updated_at = datetime('now')`
+     DO UPDATE SET
+       status = excluded.status,
+       catatan = excluded.catatan,
+       tanggal_pengusulan = CASE WHEN excluded.status = 'sedang_diusulkan' THEN excluded.tanggal_pengusulan ELSE status_usulan_kenaikan_pangkat.tanggal_pengusulan END,
+       updated_by = excluded.updated_by,
+       updated_at = datetime('now')`
   )
-    .bind(pegawaiId, tahun, bulan, body.jenisKenaikan ?? "reguler", status, body.catatan ?? null, user.id)
+    .bind(pegawaiId, tahun, bulan, body.jenisKenaikan ?? "reguler", status, body.catatan ?? null, tanggalPengusulan, user.id)
     .run();
 
   await logAktivitas(c.env, user, "status_change", "status_usulan_kenaikan_pangkat", Number(pegawaiId), { tahun, bulan, status }, c.get("requestIp"));

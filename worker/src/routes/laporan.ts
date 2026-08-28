@@ -20,6 +20,12 @@ async function fetchKenaikanPangkatRows(c: any) {
     jenis: q.jenis,
     unitKerjaId,
     jenisKepegawaian: q.jenisKepegawaian,
+    golongan: q.golongan,
+    status: q.status,
+    periodeTahun: q.periodeTahun ? Number(q.periodeTahun) : undefined,
+    periodeBulan: q.periodeBulan ? Number(q.periodeBulan) : undefined,
+    tanggalPengusulanDari: q.tanggalPengusulanDari,
+    tanggalPengusulanSampai: q.tanggalPengusulanSampai,
   });
 }
 
@@ -111,8 +117,8 @@ route.get("/kenaikan-pangkat/excel", async (c) => {
   const buffer = buildWorkbook([
     {
       name: "Usulan Kenaikan Pangkat",
-      headers: ["NIP", "Nama", "Unit Kerja", "Jenis Kenaikan", "Golongan Saat Ini", "Golongan Berikutnya", "Periode", "Status", "Diverifikasi Atasan"],
-      rows: data.map((r) => [r.nip, r.nama, r.unitKerjaNama, r.jenisKenaikan, r.golonganSaatIni, r.golonganBerikutnya, r.periodeLabel, r.status, r.diverifikasiAtasan ? "Ya" : "Belum"]),
+      headers: ["NIP", "Nama", "Unit Kerja", "Jenis Kenaikan", "Golongan Saat Ini", "Golongan Berikutnya", "Periode", "Status", "Tanggal Pengusulan", "Diverifikasi Atasan"],
+      rows: data.map((r) => [r.nip, r.nama, r.unitKerjaNama, r.jenisKenaikan, r.golonganSaatIni, r.golonganBerikutnya, r.periodeLabel, r.status, r.tanggalPengusulan, r.diverifikasiAtasan ? "Ya" : "Belum"]),
     },
   ]);
 
@@ -141,6 +147,7 @@ route.get("/kenaikan-pangkat/pdf", async (c) => {
       { header: "Gol. Berikutnya", key: "golonganBerikutnya", width: 80 },
       { header: "Periode", key: "periodeLabel", width: 90 },
       { header: "Status", key: "status", width: 90 },
+      { header: "Tgl. Pengusulan", key: "tanggalPengusulan", width: 90 },
     ],
     rows: data as unknown as Record<string, string | number | null>[],
     generatedBy: user.fullName,

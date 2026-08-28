@@ -44,4 +44,5 @@ export const STATUS_USULAN_LABELS: Record<string, string> = {
   sedang_diusulkan: "Sedang Diusulkan",
   sk_terbit: "SK Terbit",
   ditunda: "Ditunda",
+  dibatalkan: "Dibatalkan",
 };
