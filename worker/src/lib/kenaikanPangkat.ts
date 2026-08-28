@@ -98,10 +98,12 @@ async function computeEligibility(env: Env, opts: DeteksiOptions): Promise<Omit<
   }
 
   if (!opts.jenis || opts.jenis === "fungsional" || opts.jenis === "all") {
+    const masaKerjaJabatanBulan = await loadParam<number>(env, "masa_kerja_minimum_jabatan_fungsional_bulan");
     const { results } = await env.DB.prepare(
       `SELECT p.id, p.nip, p.nama, p.unit_kerja_id, uk.nama as unit_kerja_nama, p.status_kepegawaian,
-              p.golongan_ruang_aktif, jf.id as jenjang_id, jf.nama as jenjang_nama, jf.urutan, jf.jenis_jabatan_fungsional_id,
-              (SELECT ak.angka_kredit_kumulatif FROM angka_kredit ak WHERE ak.pegawai_id = p.id AND ak.is_terbaru = 1 ORDER BY ak.tanggal_pak DESC LIMIT 1) as ak_kumulatif
+              p.golongan_ruang_aktif, p.tmt_pangkat_aktif, jf.id as jenjang_id, jf.nama as jenjang_nama, jf.urutan, jf.jenis_jabatan_fungsional_id,
+              (SELECT ak.angka_kredit_kumulatif FROM angka_kredit ak WHERE ak.pegawai_id = p.id AND ak.is_terbaru = 1 ORDER BY ak.tanggal_pak DESC LIMIT 1) as ak_kumulatif,
+              (SELECT rj.tmt_jabatan FROM riwayat_jabatan rj WHERE rj.pegawai_id = p.id AND rj.jenis = 'fungsional' AND rj.is_aktif = 1 ORDER BY rj.tmt_jabatan DESC LIMIT 1) as tmt_jabatan_aktif
        FROM pegawai p
        JOIN unit_kerja uk ON uk.id = p.unit_kerja_id
        JOIN jenjang_jabatan_fungsional jf ON jf.id = p.jenjang_jabatan_fungsional_id
@@ -119,7 +121,14 @@ async function computeEligibility(env: Env, opts: DeteksiOptions): Promise<Omit<
       if (!next) continue;
       if (p.ak_kumulatif < next.angka_kredit_kumulatif_minimal) continue;
 
-      const periode = nextPeriode(periodes, today);
+      // TMT terakhir dalam jabatan: pakai riwayat_jabatan aktif jika ada, jika belum tercatat
+      // fallback ke tmt_pangkat_aktif (TMT terakhir pegawai yang selalu tersedia).
+      const tmtTerakhir = p.tmt_jabatan_aktif ?? p.tmt_pangkat_aktif;
+      if (!tmtTerakhir) continue;
+
+      const eligibleDate = new Date(tmtTerakhir);
+      eligibleDate.setMonth(eligibleDate.getMonth() + masaKerjaJabatanBulan);
+      const periode = nextPeriode(periodes, eligibleDate);
       const monthsAhead = (periode.date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24 * 30.44);
       if (monthsAhead > opts.rentangBulan) continue;
 
@@ -138,11 +147,14 @@ async function computeEligibility(env: Env, opts: DeteksiOptions): Promise<Omit<
           jenjangBerikutnya: next.nama,
           angkaKreditKumulatif: p.ak_kumulatif,
           angkaKreditAmbangBatas: next.angka_kredit_kumulatif_minimal,
+          tmtTerakhir,
+          masaKerjaJabatanBulanBerjalan: monthsBetween(tmtTerakhir, today),
+          masaKerjaJabatanMinimumBulan: masaKerjaJabatanBulan,
         },
         periodeTahun: periode.date.getUTCFullYear(),
         periodeBulan: periode.date.getUTCMonth() + 1,
         periodeLabel: periode.label,
-        overdue: false,
+        overdue: periode.date.getTime() < today.getTime(),
       });
     }
   }
