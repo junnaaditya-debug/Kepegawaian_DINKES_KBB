@@ -48,7 +48,11 @@ async function computeEligibility(env: Env, opts: DeteksiOptions): Promise<Omit<
     masa_kerja_minimum_bulan: number;
     golongan_ruang_berikutnya: string | null;
   }>();
-  const golonganMap = new Map(golonganOverrides.results.map((g) => [g.golongan_ruang, g]));
+  // Golongan/ruang ditulis dengan berbagai konvensi huruf (III/d vs III/D) tergantung
+  // sumber data (input manual vs impor massal) — normalisasi ke huruf besar supaya
+  // pencocokan TMT riwayat pangkat & golongan tidak pernah gagal karena beda kapitalisasi.
+  const normGol = (g: string | null | undefined) => (g ?? "").trim().toUpperCase();
+  const golonganMap = new Map(golonganOverrides.results.map((g) => [normGol(g.golongan_ruang), g]));
 
   const rows: Omit<EligibilityRow, "status" | "catatan" | "diverifikasiAtasan" | "catatanVerifikasi">[] = [];
 
@@ -61,12 +65,15 @@ async function computeEligibility(env: Env, opts: DeteksiOptions): Promise<Omit<
     ).all<any>();
 
     for (const p of results) {
-      const golCfg = golonganMap.get(p.golongan_ruang_aktif);
+      const golCfg = golonganMap.get(normGol(p.golongan_ruang_aktif));
       const requiredMonths = golCfg?.masa_kerja_minimum_bulan ?? defaultMasaKerja;
       const golonganBerikutnya = golCfg?.golongan_ruang_berikutnya ?? null;
       if (!golonganBerikutnya) continue;
       if (p.skp_predikat_terakhir && SKP_RANK[p.skp_predikat_terakhir] < SKP_RANK[skpMinimum]) continue;
 
+      // Rumusan reguler (BR-2): layak naik pangkat setiap `requiredMonths` (default 4 tahun /
+      // 48 bulan) terhitung sejak TMT riwayat pangkat & golongan terakhir (p.tmt_pangkat_aktif,
+      // selalu sinkron dengan baris aktif di riwayat_pangkat_golongan lewat rute POST-nya).
       const eligibleDate = new Date(p.tmt_pangkat_aktif);
       eligibleDate.setMonth(eligibleDate.getMonth() + requiredMonths);
       const periode = nextPeriode(periodes, eligibleDate);

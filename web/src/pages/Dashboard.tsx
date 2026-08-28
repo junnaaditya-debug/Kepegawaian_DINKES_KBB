@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import type { DashboardRingkasan } from "../types";
 import { PageHeader, Spinner } from "../components/ui";
-import { Users, TrendingUp, Building2, ClipboardList } from "lucide-react";
+import { Users, TrendingUp, Building2, ClipboardList, Bell } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -54,6 +54,16 @@ export default function Dashboard() {
     ),
   });
 
+  // Notifikasi kenaikan pangkat: pegawai yang masa kenaikan pangkatnya sudah
+  // dalam 3 bulan ke depan (atau sudah lewat periode / overdue).
+  const { data: notifikasiKenaikan } = useQuery({
+    queryKey: ["kenaikan-pangkat", "deteksi", "dashboard-notifikasi"],
+    queryFn: () => api.get<{ data: { pegawaiId: number; nama: string; unitKerjaNama: string; periodeLabel: string; jenisKenaikan: string; overdue: boolean }[]; total: number }>(
+      "/kenaikan-pangkat/deteksi",
+      { rentangBulan: 3 }
+    ),
+  });
+
   if (isLoading || !data) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -80,6 +90,40 @@ export default function Dashboard() {
         />
         <StatCard label="Unit Kerja" value={formatNumber(totalUnit)} icon={<Building2 size={20} className="text-white" />} color="bg-emerald-600" />
         <StatCard label="SK Terbit (Tahun Terbaru)" value={formatNumber(skTerbitTahunIni)} icon={<ClipboardList size={20} className="text-white" />} color="bg-purple-600" />
+      </div>
+
+      <div className="card border border-amber-200 bg-amber-50/60 p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-500 text-white">
+              <Bell size={16} />
+            </span>
+            <div>
+              <h3 className="text-sm font-semibold text-slate-800">Notifikasi Kenaikan Pangkat</h3>
+              <p className="text-xs text-slate-500">Pegawai yang masa kenaikan pangkatnya kurang dari 3 bulan lagi</p>
+            </div>
+          </div>
+          {notifikasiKenaikan && notifikasiKenaikan.total > 0 && (
+            <span className="badge bg-amber-500 text-white">{notifikasiKenaikan.total}</span>
+          )}
+        </div>
+        {!notifikasiKenaikan || notifikasiKenaikan.data.length === 0 ? (
+          <p className="py-4 text-center text-xs text-slate-500">Tidak ada pegawai yang mendekati masa kenaikan pangkat dalam 3 bulan ke depan.</p>
+        ) : (
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {notifikasiKenaikan.data.map((r) => (
+              <div key={`${r.pegawaiId}-${r.periodeLabel}-${r.jenisKenaikan}`} className="flex items-center justify-between rounded-lg border border-amber-100 bg-white px-3 py-2 text-xs">
+                <div>
+                  <Link to={`/pegawai/${r.pegawaiId}`} className="font-medium text-brand-700 hover:underline">
+                    {r.nama}
+                  </Link>
+                  <p className="text-slate-500">{r.unitKerjaNama}</p>
+                </div>
+                <span className={`badge ${r.overdue ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>{r.periodeLabel}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -174,7 +218,9 @@ export default function Dashboard() {
             {(kenaikan?.data ?? []).slice(0, 6).map((r) => (
               <div key={`${r.pegawaiId}-${r.periodeLabel}`} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2 text-xs">
                 <div>
-                  <p className="font-medium text-slate-800">{r.nama}</p>
+                  <Link to={`/pegawai/${r.pegawaiId}`} className="font-medium text-slate-800 hover:text-brand-700 hover:underline">
+                    {r.nama}
+                  </Link>
                   <p className="text-slate-500">{r.unitKerjaNama}</p>
                 </div>
                 <span className={`badge ${r.overdue ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700"}`}>{r.periodeLabel}</span>
